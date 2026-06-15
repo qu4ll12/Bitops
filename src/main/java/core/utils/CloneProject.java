@@ -465,6 +465,14 @@ public final class CloneProject {
             ASTHelper.Coverage coverage) {
         StringBuilder result = new StringBuilder();
 
+        if (isAlwaysTrueCondition(whileStatement.getExpression())) {
+            result.append("while (true) {\n");
+            result.append(generateCodeForAlwaysTrueLoopConditionMark(whileStatement.getExpression()));
+            result.append(generateCodeForOneStatement(whileStatement.getBody(), ";", coverage));
+            result.append("}\n");
+            return result.toString();
+        }
+
         result.append("while (");
         result.append(generateCodeForCondition(whileStatement.getExpression(), coverage));
         result.append(") {\n");
@@ -473,6 +481,17 @@ public final class CloneProject {
         result.append("}\n");
 
         return result.toString();
+    }
+
+    private static boolean isAlwaysTrueCondition(Expression condition) {
+        return condition instanceof BooleanLiteral && ((BooleanLiteral) condition).booleanValue();
+    }
+
+    private static String generateCodeForAlwaysTrueLoopConditionMark(Expression condition) {
+        totalFunctionStatement++;
+        totalClassStatement++;
+        return "markOneStatement(\"" + condition + "\", true, false, "
+                + condition.getStartPosition() + ");\n";
     }
 
     /**

@@ -1,7 +1,7 @@
 package core.output.testDriver;
 
 import core.TestGeneration.result.RamStorage;
-import core.output.clone.operators.rightshift.BitPosition;
+import core.output.clone.ide_preview_167022670704914091.emLoc.BitPosition;
 import java.util.List;
 
 public class TestDriver {

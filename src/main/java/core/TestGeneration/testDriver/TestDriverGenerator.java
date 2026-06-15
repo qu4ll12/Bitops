@@ -28,31 +28,21 @@ public class TestDriverGenerator {
             throw new IllegalArgumentException("simpleClassName cannot be null or empty");
         }
         
-        try {
-            createTestDriverFile(buildTestDriverSource(testUnit, parameterClasses,
-                    fullyClonedClassName, simpleClassName));
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot generate test driver file with error: " + e.getMessage(), e);
-        }
-    }
-
-    public static String buildTestDriverSource(MethodDeclaration testUnit, Class<?>[] parameterClasses,
-                                                String fullyClonedClassName, String simpleClassName) {
-        if (fullyClonedClassName == null || fullyClonedClassName.isEmpty()) {
-            throw new IllegalArgumentException("fullyClonedClassName cannot be null or empty");
-        }
-
         StringBuilder result = new StringBuilder();
 
         result.append("package ").append(FilePath.TEST_DRIVER_FILE_PACKAGE_LOCATION).append(";\n\n");
+
         result.append("import ").append(FilePath.RAM_STORAGE_CLASS_IMPORT).append(";\n");
         result.append("import ").append(fullyClonedClassName).append(";\n");
         result.append("import java.util.List;\n\n");
         result.append("public class TestDriver {\n");
         result.append(generateTestRunner(testUnit, parameterClasses, simpleClassName));
         result.append("}\n");
-
-        return result.toString();
+        try {
+            createTestDriverFile(result.toString());
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot generate test driver file with error: " + e.getMessage(), e);
+        }
     }
 
     /**

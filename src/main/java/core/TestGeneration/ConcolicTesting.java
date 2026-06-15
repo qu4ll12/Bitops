@@ -19,6 +19,9 @@ import core.utils.FilePath;
 import core.utils.ProjectParser;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class ConcolicTesting {
@@ -183,31 +186,25 @@ public class ConcolicTesting {
     private void setupFullyClonedClassName(String className, String filePath,
             ASTHelper.Coverage coverage) {
         try {
+            Path rootPackagePath = CloneProject.findRootPackage(Paths.get(filePath));
             CloneProject.cloneProject(filePath, coverage);
             className = className.replace(".java", "");
             this.simpleClassName = getClassFromCU(compilationUnit);
-            this.fullyClonedClassName = buildFullyClonedClassName(compilationUnit, this.simpleClassName);
+
+            String relative = filePath.substring(rootPackagePath.toString().length() + 1);
+            int lastSlash = relative.lastIndexOf(File.separator);
+            if (lastSlash != -1) {
+                relative = relative.substring(0, lastSlash + 1);
+            } else {
+                relative = "";
+            }
+
+            String packetName = relative.replace(File.separator, ".");
+
+            this.fullyClonedClassName = FilePath.CLONED_PROJECT_ROOT_PACKAGE + "." + packetName + this.simpleClassName;
         } catch (Exception e) {
             throw new RuntimeException("Failed to clone project for class: " + className, e);
         }
-    }
-
-    static String buildFullyClonedClassName(CompilationUnit compilationUnit, String simpleClassName) {
-        if (compilationUnit == null) {
-            throw new IllegalArgumentException("CompilationUnit cannot be null");
-        }
-        if (simpleClassName == null || simpleClassName.isEmpty()) {
-            throw new IllegalArgumentException("simpleClassName cannot be null or empty");
-        }
-
-        PackageDeclaration packageDeclaration = compilationUnit.getPackage();
-        if (packageDeclaration == null) {
-            return FilePath.CLONED_PROJECT_ROOT_PACKAGE + "." + simpleClassName;
-        }
-
-        return FilePath.CLONED_PROJECT_ROOT_PACKAGE + "."
-                + packageDeclaration.getName() + "."
-                + simpleClassName;
     }
 
     private static String getClassFromCU(CompilationUnit compilationUnit) {

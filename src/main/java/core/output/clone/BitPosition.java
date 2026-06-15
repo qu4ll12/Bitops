@@ -44,5 +44,5 @@ return k;
 }
 
 }
-public static final int BitPositionTotalStatement = 20;
+public static final int BitPositionTotalStatement = 1622;
 }

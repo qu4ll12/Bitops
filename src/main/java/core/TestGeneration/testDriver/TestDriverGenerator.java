@@ -28,21 +28,31 @@ public class TestDriverGenerator {
             throw new IllegalArgumentException("simpleClassName cannot be null or empty");
         }
         
+        try {
+            createTestDriverFile(buildTestDriverSource(testUnit, parameterClasses,
+                    fullyClonedClassName, simpleClassName));
+        } catch (IOException e) {
+            throw new RuntimeException("Cannot generate test driver file with error: " + e.getMessage(), e);
+        }
+    }
+
+    public static String buildTestDriverSource(MethodDeclaration testUnit, Class<?>[] parameterClasses,
+                                                String fullyClonedClassName, String simpleClassName) {
+        if (fullyClonedClassName == null || fullyClonedClassName.isEmpty()) {
+            throw new IllegalArgumentException("fullyClonedClassName cannot be null or empty");
+        }
+
         StringBuilder result = new StringBuilder();
 
         result.append("package ").append(FilePath.TEST_DRIVER_FILE_PACKAGE_LOCATION).append(";\n\n");
-
         result.append("import ").append(FilePath.RAM_STORAGE_CLASS_IMPORT).append(";\n");
         result.append("import ").append(fullyClonedClassName).append(";\n");
         result.append("import java.util.List;\n\n");
         result.append("public class TestDriver {\n");
         result.append(generateTestRunner(testUnit, parameterClasses, simpleClassName));
         result.append("}\n");
-        try {
-            createTestDriverFile(result.toString());
-        } catch (IOException e) {
-            throw new RuntimeException("Cannot generate test driver file with error: " + e.getMessage(), e);
-        }
+
+        return result.toString();
     }
 
     /**
@@ -98,28 +108,21 @@ public class TestDriverGenerator {
                   .append(" = parseArg").append(i).append("(args[").append(i).append("]);\n");
         }
         
-        boolean isStatic = isStaticMethod(testUnit);
-        if (isStatic) {
-            result.append("        Object output = ").append(simpleClassName).append(".");
-        } else {
-            result.append("        Object output = new ").append(simpleClassName).append("().");
-        }
-        result.append(testUnit.getName().toString()).append("(");
-        for (int i = 0; i < parameterClasses.length; i++) {
-            result.append("arg").append(i);
-            if (i != parameterClasses.length - 1) {
-                result.append(", ");
-            }
-        }
-        result.append(");\n");
-        result.append("        outputs.add(output);\n");
+        result.append("        try {\n");
+        result.append("            Object output = ");
+        appendMethodCall(result, testUnit, parameterClasses, simpleClassName);
+        result.append(";\n");
+        result.append("            outputs.add(output);\n");
+        result.append("        } catch (Throwable throwable) {\n");
+        result.append("            outputs.add(new core.TestGeneration.result.ExceptionOutput(throwable));\n");
+        result.append("        }\n");
         result.append("    }\n");
-        
+
         // Generate parse methods for each parameter
         for (int i = 0; i < parameterClasses.length; i++) {
             result.append(generateParseMethod(i, parameterClasses[i]));
         }
-        
+
         // Add unescape utility methods if needed
         boolean needsUnescape = false;
         for (Class<?> paramType : parameterClasses) {
@@ -131,8 +134,26 @@ public class TestDriverGenerator {
         if (needsUnescape) {
             result.append(generateUnescapeMethods());
         }
-        
+
         return result.toString();
+    }
+
+    private static void appendMethodCall(StringBuilder result, MethodDeclaration testUnit,
+                                         Class<?>[] parameterClasses, String simpleClassName) {
+        boolean isStatic = isStaticMethod(testUnit);
+        if (isStatic) {
+            result.append(simpleClassName).append(".");
+        } else {
+            result.append("new ").append(simpleClassName).append("().");
+        }
+        result.append(testUnit.getName().toString()).append("(");
+        for (int i = 0; i < parameterClasses.length; i++) {
+            result.append("arg").append(i);
+            if (i != parameterClasses.length - 1) {
+                result.append(", ");
+            }
+        }
+        result.append(")");
     }
     
     private static String generateParseMethod(int index, Class<?> paramType) {

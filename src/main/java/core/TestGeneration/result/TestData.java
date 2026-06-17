@@ -29,7 +29,7 @@ public class TestData {
         this.markedStatements = markedStatements;
         this.output = output;
         this.unitCoverage = round(unitCoverage);
-        this.status = "PASS";
+        this.status = output instanceof ExceptionOutput ? "EXCEPTION" : "PASS";
     }
 
     private double round(double number) {
@@ -74,6 +74,7 @@ public class TestData {
             result.append(parameterData.toString()).append("; ");
         }
         result.append(" | Output: ").append(output);
+        result.append(" | Status: ").append(status);
         result.append(" | Coverage: ").append(unitCoverage);
         return result.toString();
     }

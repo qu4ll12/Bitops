@@ -12,6 +12,7 @@ import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -76,15 +77,62 @@ public class CloneProjectTest {
         compileGeneratedSource("Solution.java", cloneSource);
     }
 
-    private static String createCloneSource(String source, String fileName) throws Exception {
-        Path inputDir = Path.of("target", "test-inputs");
-        Files.createDirectories(inputDir);
-        Path sourceFile = inputDir.resolve(fileName);
-        Files.writeString(sourceFile, source);
+    @Test
+    public void cloneSourceWithEscapedQuotesInStringLiteralCompiles() throws Exception {
+        String cloneSource = createCloneSource("""
+                import java.util.Arrays;
 
-        ProjectParser parser = new ProjectParser();
-        parser.loadFile(sourceFile.toString());
-        CompilationUnit compilationUnit = parser.getCompilationUnit();
+                class DecimalToBinary {
+                    public static String decimalToBinaryUsingStack(int n) {
+                        Arrays.asList("while loop breaks only when \\"number\\" terminates to : " + n, "  ")
+                            .forEach(System.out::println);
+                        return String.valueOf(n);
+                    }
+                }
+                """, "DecimalToBinary.java");
+
+        assertTrue(cloneSource.contains("while loop breaks only when"));
+
+        compileGeneratedSource("DecimalToBinary.java", cloneSource);
+    }
+
+    @Test
+    public void cloneSourcePathFollowsOriginalPackageDirectory() throws Exception {
+        CompilationUnit compilationUnit = parseCompilationUnit("""
+                package com.thealgorithms.bitmanipulation;
+
+                public final class BitSwap {
+                    public static int bitSwap(int data, int posA, int posB) {
+                        return data;
+                    }
+                }
+                """, "BitSwap.java");
+
+        Path expected = Path.of(FilePath.JCIA_PROJECT_ROOT_PATH, FilePath.PATH_TO_CLONED_PROJECT)
+                .resolve(Path.of("com", "thealgorithms", "bitmanipulation"))
+                .resolve("BitSwap.java");
+
+        assertEquals(expected, CloneProject.getCloneSourcePath(compilationUnit, "BitSwap.java"));
+    }
+
+    @Test
+    public void cloneSourcePathForDefaultPackageStaysAtCloneRoot() throws Exception {
+        CompilationUnit compilationUnit = parseCompilationUnit("""
+                class DefaultPackageClass {
+                    int helper(int value) {
+                        return value;
+                    }
+                }
+                """, "DefaultPackageClass.java");
+
+        Path expected = Path.of(FilePath.JCIA_PROJECT_ROOT_PATH, FilePath.PATH_TO_CLONED_PROJECT)
+                .resolve("DefaultPackageClass.java");
+
+        assertEquals(expected, CloneProject.getCloneSourcePath(compilationUnit, "DefaultPackageClass.java"));
+    }
+
+    private static String createCloneSource(String source, String fileName) throws Exception {
+        CompilationUnit compilationUnit = parseCompilationUnit(source, fileName);
 
         Method createCloneSourceCode = CloneProject.class.getDeclaredMethod(
                 "createCloneSourceCode", CompilationUnit.class, ASTHelper.Coverage.class);
@@ -93,6 +141,17 @@ public class CloneProjectTest {
                 null, compilationUnit, ASTHelper.Coverage.STATEMENT);
 
         return cloneSource;
+    }
+
+    private static CompilationUnit parseCompilationUnit(String source, String fileName) throws Exception {
+        Path inputDir = Path.of("target", "test-inputs");
+        Files.createDirectories(inputDir);
+        Path sourceFile = inputDir.resolve(fileName);
+        Files.writeString(sourceFile, source);
+
+        ProjectParser parser = new ProjectParser();
+        parser.loadFile(sourceFile.toString());
+        return parser.getCompilationUnit();
     }
 
     private static void compileGeneratedSource(String fileName, String cloneSource) throws Exception {

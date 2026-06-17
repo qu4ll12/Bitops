@@ -8,6 +8,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -29,6 +30,12 @@ public class TestDriverRunner {
             }
             String[] args = TestDriverGenerator.serializeTestInputs(testInputs);
             invokeTestDriverMain(args);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getTargetException();
+            String message = cause == null ? e.getMessage()
+                    : cause.getClass().getSimpleName() + ": " + cause.getMessage();
+            System.out.println("Error running test driver: " + message);
+            throw new RuntimeException("Failed to run test driver in-process: " + message, cause);
         } catch (Exception e) {
             System.out.println("Error running test driver: " + e.getMessage());
             throw new RuntimeException("Failed to run test driver in-process", e);

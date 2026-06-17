@@ -54,18 +54,28 @@ public final class CloneProject {
             parser.loadFile(file2TestPath);
             CompilationUnit compilationUnit = parser.getCompilationUnit();
 
-            // Extract the actual class name from the CompilationUnit
             String actualClassName = extractClassName(compilationUnit);
             String correctFileName = actualClassName + ".java";
 
-            createFile(FilePath.JCIA_PROJECT_ROOT_PATH + File.separator + FilePath.PATH_TO_CLONED_PROJECT, correctFileName);
             String sourceCode = createCloneSourceCode(compilationUnit, coverage);
-            String filePath = FilePath.JCIA_PROJECT_ROOT_PATH + File.separator + FilePath.PATH_TO_CLONED_PROJECT + File.separator + correctFileName;
-            writeDataToFile(sourceCode, filePath);
-            return filePath;
+            Path cloneFilePath = getCloneSourcePath(compilationUnit, correctFileName);
+            Files.createDirectories(cloneFilePath.getParent());
+            writeDataToFile(sourceCode, cloneFilePath.toString());
+            return cloneFilePath.toString();
         } catch (IOException e) {
             throw new RuntimeException("Error processing file: " + file2TestPath, e);
         }
+    }
+
+    static Path getCloneSourcePath(CompilationUnit compilationUnit, String fileName) {
+        Path cloneRoot = Path.of(FilePath.JCIA_PROJECT_ROOT_PATH, FilePath.PATH_TO_CLONED_PROJECT);
+        PackageDeclaration packageDeclaration = compilationUnit.getPackage();
+        if (packageDeclaration == null) {
+            return cloneRoot.resolve(fileName);
+        }
+
+        Path packagePath = Path.of(packageDeclaration.getName().toString().replace(".", File.separator));
+        return cloneRoot.resolve(packagePath).resolve(fileName);
     }
 
     /**
@@ -314,15 +324,15 @@ public final class CloneProject {
             fileName = fileName + ".java";
         }
 
-        createFile(FilePath.JCIA_PROJECT_ROOT_PATH + File.separator + FilePath.PATH_TO_CLONED_PROJECT, fileName);
         String sourceCode = createCloneSourceCode(compilationUnit, coverage);
-        String filePath = FilePath.JCIA_PROJECT_ROOT_PATH + File.separator + FilePath.PATH_TO_CLONED_PROJECT + File.separator + fileName;
-        writeDataToFile(sourceCode, filePath);
+        Path cloneFilePath = getCloneSourcePath(compilationUnit, fileName);
+        Files.createDirectories(cloneFilePath.getParent());
+        writeDataToFile(sourceCode, cloneFilePath.toString());
 
         try {
-            Compiler.getInstance().compileJavaFile(filePath, FilePath.PATH_TO_MAVEN_TARGET_CLASSES);
+            Compiler.getInstance().compileJavaFile(cloneFilePath.toString(), FilePath.PATH_TO_MAVEN_TARGET_CLASSES);
         } catch (RuntimeException e) {
-            throw new Exception("Compilation failed for regenerated file: " + filePath, e);
+            throw new Exception("Compilation failed for regenerated file: " + cloneFilePath, e);
         }
 
     }
@@ -490,7 +500,7 @@ public final class CloneProject {
     private static String generateCodeForAlwaysTrueLoopConditionMark(Expression condition) {
         totalFunctionStatement++;
         totalClassStatement++;
-        return "markOneStatement(\"" + condition + "\", true, false, "
+        return "markOneStatement(\"" + escapeJavaStringLiteral(condition.toString()) + "\", true, false, "
                 + condition.getStartPosition() + ");\n";
     }
 
@@ -531,28 +541,7 @@ public final class CloneProject {
     private static String generateCodeForMarkMethod(ASTNode statement, String markMethodSeparator) {
         StringBuilder result = new StringBuilder();
 
-        String stringStatement = statement.toString();
-        StringBuilder newStatement = new StringBuilder();
-
-        // Escape special characters for string literal
-        for (int i = 0; i < stringStatement.length(); i++) {
-            char charAt = stringStatement.charAt(i);
-
-            if (charAt == '\n') {
-                newStatement.append("\\n");
-                continue;
-            } else if (charAt == '"') {
-                newStatement.append("\\").append('"');
-                continue;
-            } else if (i != stringStatement.length() - 1 && charAt == '\\' &&
-                    stringStatement.charAt(i + 1) == 'n') {
-                newStatement.append("\" + \"").append("\\n").append("\" + \"");
-                i++;
-                continue;
-            }
-
-            newStatement.append(charAt);
-        }
+        String newStatement = escapeJavaStringLiteral(statement.toString());
 
         int position = statement.getStartPosition();
         result.append("markOneStatement(\"").append(newStatement)
@@ -561,6 +550,40 @@ public final class CloneProject {
         totalFunctionStatement++;
         totalClassStatement++;
 
+        return result.toString();
+    }
+
+    private static String escapeJavaStringLiteral(String value) {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\':
+                    result.append("\\\\");
+                    break;
+                case '"':
+                    result.append("\\\"");
+                    break;
+                case '\n':
+                    result.append("\\n");
+                    break;
+                case '\r':
+                    result.append("\\r");
+                    break;
+                case '\t':
+                    result.append("\\t");
+                    break;
+                case '\b':
+                    result.append("\\b");
+                    break;
+                case '\f':
+                    result.append("\\f");
+                    break;
+                default:
+                    result.append(c);
+                    break;
+            }
+        }
         return result.toString();
     }
 
@@ -587,9 +610,10 @@ public final class CloneProject {
         totalClassStatement++;
         totalFunctionBranch += 2;
         int position = condition.getStartPosition();
-        return "((" + condition + ") && markOneStatement(\"" + condition + "\", true, false, " +
+        String escapedCondition = escapeJavaStringLiteral(condition.toString());
+        return "((" + condition + ") && markOneStatement(\"" + escapedCondition + "\", true, false, " +
                 position + "))" +
-                " || markOneStatement(\"" + condition + "\", false, true, " + position + ")";
+                " || markOneStatement(\"" + escapedCondition + "\", false, true, " + position + ")";
     }
 
     /**
@@ -619,9 +643,10 @@ public final class CloneProject {
             totalClassStatement++;
             totalFunctionBranch += 2;
             int position = condition.getStartPosition();
-            result.append("((").append(condition).append(") && markOneStatement(\"").append(condition)
+            String escapedCondition = escapeJavaStringLiteral(condition.toString());
+            result.append("((").append(condition).append(") && markOneStatement(\"").append(escapedCondition)
                     .append("\", true, false, ").append(position).append("))");
-            result.append(" || markOneStatement(\"").append(condition).append("\", false, true, ")
+            result.append(" || markOneStatement(\"").append(escapedCondition).append("\", false, true, ")
                     .append(position).append(")");
         }
 
